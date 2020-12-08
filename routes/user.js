@@ -15,6 +15,29 @@ cloudinary.config({
 //const IsAuthenticated = require("../middleware/IsAuthenticated");
 const User = require("../models/User");
 const Offer = require("../models/Offer");
+const { post } = require("./offer");
+
+//Authentification
+
+const isAuthenticated = async (req, res, next) => {
+  if (req.headers.authorization) {
+    const token = req.headers.authorization.replace("Bearer ", "");
+    //console.log(token); //vérification du token
+    // Chercher dans la BDD s'il y a bien un User qui possède ce token
+    const user = await User.findOne({
+      token: token,
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    } else {
+      req.user = user;
+      return next();
+    }
+  } else {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+};
 
 //Créer un compte "SignUp"
 
@@ -105,6 +128,62 @@ router.post("/user/login", async (req, res) => {
     }
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+//Rechercher un profil
+
+router.get("/user/:id", isAuthenticated, async (req, res) => {
+  if (req.params._id) {
+    try {
+      //trouver l'id dans la BD
+      const user = await user.findById(req.params.id);
+      if (user) {
+        res.json({
+          id: user._id,
+          email: user.email,
+          username: user.account.username,
+        });
+      } else {
+        res.status(400).json({ error: "user not found" });
+      }
+    } catch (error) {
+      res.status(400).json({ error: "Missing user id" });
+    }
+  }
+});
+
+// modifier le profile d'un utilisateur
+
+router.post("/user/update", async (req, res) => {
+  try {
+    const userEmail = await User.findOne({ email: req.fields.email });
+    const userUsername = await User.findOne({ username: req.fields.username });
+
+    //vérifier si l'email et le username sont dans la DB
+
+    if (userEmail && userEmail.email === req.fields.email) {
+      return res.status(400).json({ error: "This username is already used" });
+    } else if (
+      userUsername &&
+      userUsername.account.username === req.fields.username
+    ) {
+      return res.status(400).json({ error: "This username is already used" });
+    } else if (req.fields.email || req.fields.username) {
+      const userToUpdate = await User.findById(req.user._id);
+      if (req.fields.email) {
+        userToUpdate.email = req.fields.email;
+      }
+      if (req.fields.username) {
+        userToUpdate.username = req.fields.username;
+      }
+      await userToUpdate.save();
+      res.json({ email: userToUpdate.email, username: userToUpdate.username });
+    } else {
+      res.status(400).json({ error: "Missing informations" });
+    }
+  } catch (error) {
+    res.status(400).json({ erro: error.message });
   }
 });
 

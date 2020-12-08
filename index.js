@@ -2,10 +2,10 @@ const express = require("express");
 const mongoose = require("mongoose");
 const formidable = require("express-formidable");
 const cors = require("cors");
-app.use(cors());
 
 const app = express();
 app.use(formidable());
+app.use(cors());
 mongoose.connect("mongodb://localhost/vinted-phoenix20", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
