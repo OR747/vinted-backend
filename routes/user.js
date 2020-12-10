@@ -72,9 +72,9 @@ router.post("/user/signup", async (req, res) => {
         salt: salt,
       });
       //Ajouter une photo
-      //const pictureToUpload = req.files.picture.path;
-      //const result = await cloudinary.uploader.upload(pictureToUpload);
-      //newuser.account.avatar = result
+      const pictureToUpload = req.files.picture.path;
+      const result = await cloudinary.uploader.upload(pictureToUpload);
+      newuser.account.avatar = result;
 
       await newuser.save();
       //On peut filtrer au niveau de la réponse
@@ -134,15 +134,19 @@ router.post("/user/login", async (req, res) => {
 //Rechercher un profil
 
 router.get("/user/:id", isAuthenticated, async (req, res) => {
-  if (req.params._id) {
+  if (req.params.id) {
     try {
       //trouver l'id dans la BD
-      const user = await user.findById(req.params.id);
+      const user = await User.findById(req.params.id);
+      const offers = await Offer.find({ owner: req.params.id });
+      const password = await User.find(req.params.password);
       if (user) {
         res.json({
           id: user._id,
           email: user.email,
+          password: password,
           username: user.account.username,
+          numbOffer: offers.length,
         });
       } else {
         res.status(400).json({ error: "user not found" });
@@ -163,7 +167,7 @@ router.post("/user/update", async (req, res) => {
     //vérifier si l'email et le username sont dans la DB
 
     if (userEmail && userEmail.email === req.fields.email) {
-      return res.status(400).json({ error: "This username is already used" });
+      return res.status(400).json({ error: "This email is already used" });
     } else if (
       userUsername &&
       userUsername.account.username === req.fields.username
@@ -186,6 +190,95 @@ router.post("/user/update", async (req, res) => {
     res.status(400).json({ erro: error.message });
   }
 });
+
+//upload une photo
+router.put(
+  "/user/upload_picture",
+
+  async (req, res) => {
+    try {
+      if (req.files.photo) {
+        const user = req.user;
+
+        if (user.account.photo === null) {
+          await cloudinary.uploader.upload(
+            req.files.photo.path,
+            {
+              folder: "",
+            },
+            async function (error, result) {
+              if (error) {
+                res.status(400).json({ error: "An error occurred" });
+              } else {
+                const userToUpdate = await User.findByIdAndUpdate(user._id, {
+                  "account.avatar": [
+                    {
+                      url: result.secure_url,
+                      id: result.public_id,
+                      name: req.files.photo.name,
+                      type: req.files.photo.type,
+                    },
+                  ],
+                });
+                await userToUpdate.save();
+
+                const userUpdated = await User.findById(userToUpdate._id);
+                res.json({
+                  id: userUpdated._id,
+                  email: userUpdated.email,
+                  username: userUpdated.account.username,
+
+                  photo: userUpdated.account.photo,
+                  rooms: userUpdated.rooms,
+                });
+              }
+            }
+          );
+        } else {
+          await cloudinary.uploader.destroy(user.account.photo[0].id);
+          await cloudinary.uploader.upload(
+            req.files.photo.path,
+            {
+              folder: "airbnb/users",
+            },
+            async function (error, result) {
+              if (error) {
+                res.status(400).json({ error: "An error occurred" });
+              } else {
+                const userToUpdate = await User.findByIdAndUpdate(user._id, {
+                  "account.avatar": [
+                    {
+                      url: result.secure_url,
+                      id: result.public_id,
+                      name: req.files.photo.name,
+                      type: req.files.photo.type,
+                    },
+                  ],
+                });
+                await userToUpdate.save();
+
+                const userUpdated = await User.findById(user._id);
+                res.json({
+                  id: userUpdated._id,
+                  email: userUpdated.email,
+                  username: userUpdated.account.username,
+                  name: userUpdated.account.name,
+                  description: userUpdated.account.description,
+                  photo: userUpdated.account.photo,
+                  rooms: userUpdated.rooms,
+                });
+              }
+            }
+          );
+        }
+      } else {
+        res.status(400).json({ error: "Missing picture" });
+      }
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+);
 
 //Export
 module.exports = router;
